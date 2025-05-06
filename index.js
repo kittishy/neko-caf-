@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { loadCommands } from "./commands/index.js";
 import { data as embedData } from "./commands/embed.js";
+import { data as menuData, restoreMenu, handleButton } from "./commands/menu.js";
 
 // Carregar configurações do bot
 let config = {};
@@ -20,8 +21,9 @@ const commandsMap = await loadCommands();
 console.log("Comandos carregados:", Array.from(commandsMap.keys()));
 
 const embedCommand = embedData;
+const menuCommand = menuData;
 
-const commands = [embedCommand.toJSON()];
+const commands = [embedCommand.toJSON(), menuCommand.toJSON()];
 
 const rest = new REST({ version: "10" }).setToken(config.token);
 
@@ -38,9 +40,11 @@ const rest = new REST({ version: "10" }).setToken(config.token);
   }
 })();
 
-client.on("ready", () => {
+client.on("ready", async () => {
   console.log(`Bot logado como ${client.user.tag}`);
   client.user.setPresence({ activities: [{ name: "Online!" }], status: "online" });
+  // Restaura o menu interativo após reconexão
+  await restoreMenu(client);
 });
 
 // Monitoramento de conexão e reconexão
@@ -87,6 +91,10 @@ client.on("shardResume", (id) => {
 });
 
 client.on("interactionCreate", async (interaction) => {
+  if (interaction.isButton()) {
+    await handleButton(interaction);
+    return;
+  }
   if (!interaction.isChatInputCommand()) return;
   const command = commandsMap.get(interaction.commandName);
   console.log("Recebido comando:", interaction.commandName, "Encontrado:", !!command);
@@ -97,7 +105,7 @@ client.on("interactionCreate", async (interaction) => {
   try {
     await command.execute(interaction);
   } catch (err) {
-    console.error(`Erro ao executar o comando /${interaction.commandName}:`, err);
+    console.error(`Erro ao executar o comando /${interaction.commandName}:", err);
     if (!interaction.replied) {
       await interaction.reply({ content: "Ocorreu um erro ao processar o comando.", ephemeral: true });
     }
