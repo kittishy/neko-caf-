@@ -105,7 +105,7 @@ client.on("interactionCreate", async (interaction) => {
   try {
     await command.execute(interaction);
   } catch (err) {
-    console.error(`Erro ao executar o comando /${interaction.commandName}:", err);
+    console.error(`Erro ao executar o comando /${interaction.commandName}:`, err);
     if (!interaction.replied) {
       await interaction.reply({ content: "Ocorreu um erro ao processar o comando.", ephemeral: true });
     }

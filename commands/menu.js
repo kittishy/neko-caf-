@@ -198,14 +198,7 @@ const funcoesModeracao = [
   }
 ];
 
-const funcoes = [
-  ...funcoesModeracao,
-  ...Array.from({ length: 1000 }, (_, i) => ({
-    id: `func_${i+1}`,
-    nome: `Função ${i+1}`,
-    categoria: `Categoria ${Math.floor(i/100)+1}`
-  }))
-];
+
 
 export async function handleButton(interaction) {
   if (!interaction.isButton()) return;
