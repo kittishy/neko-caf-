@@ -40,6 +40,50 @@ const rest = new REST({ version: "10" }).setToken(config.token);
 
 client.on("ready", () => {
   console.log(`Bot logado como ${client.user.tag}`);
+  client.user.setPresence({ activities: [{ name: "Online!" }], status: "online" });
+});
+
+// Monitoramento de conexão e reconexão
+let reconnecting = false;
+setInterval(() => {
+  if (client.ws.status !== 0) { // 0 = READY
+    if (!reconnecting) {
+      reconnecting = true;
+      console.log("Tentando reconectar ao Discord...");
+      if (client.user) {
+        client.user.setPresence({ activities: [{ name: "Reconectando..." }], status: "dnd" });
+      }
+    }
+  } else {
+    if (reconnecting) {
+      reconnecting = false;
+      if (client.user) {
+        client.user.setPresence({ activities: [{ name: "Online!" }], status: "online" });
+      }
+      console.log("Reconectado ao Discord!");
+    }
+  }
+}, 10000); // verifica a cada 10 segundos
+
+client.on("shardDisconnect", (event, id) => {
+  console.warn(`Shard ${id} desconectada. Código: ${event.code}`);
+  if (client.user) {
+    client.user.setPresence({ activities: [{ name: "Reconectando..." }], status: "dnd" });
+  }
+});
+
+client.on("shardReconnecting", (id) => {
+  console.warn(`Shard ${id} tentando reconectar...`);
+  if (client.user) {
+    client.user.setPresence({ activities: [{ name: "Reconectando..." }], status: "dnd" });
+  }
+});
+
+client.on("shardResume", (id) => {
+  console.log(`Shard ${id} reconectada!`);
+  if (client.user) {
+    client.user.setPresence({ activities: [{ name: "Online!" }], status: "online" });
+  }
 });
 
 client.on("interactionCreate", async (interaction) => {
