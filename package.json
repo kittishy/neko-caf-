@@ -1,0 +1,16 @@
+{
+  "name": "neko-cafe-discord-bot",
+  "version": "1.0.0",
+  "description": "Bot Discord com slash commands e embeds em JavaScript",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "neko-cafe-discord-bot": "file:"
+  }
+}
