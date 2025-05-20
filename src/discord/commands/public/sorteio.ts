@@ -15,6 +15,7 @@ const GiveawaySchema = new mongoose.Schema({
   endAt: { type: Date, required: true },
   participants: { type: [String], default: [] },
   ended: { type: Boolean, default: false },
+  requiredRoles: { type: [String], default: [] }, // Cargos necessários para participar
 });
 
 // Model do MongoDB
@@ -45,7 +46,8 @@ function createGiveawayEmbed(
   endAt: Date,
   hostId: string,
   winners: number,
-  participants: string[]
+  participants: string[],
+  requiredRoles: string[] = []
 ) {
   const embed = new EmbedBuilder()
     .setTitle(`🎉 SORTEIO: ${prize}`)
@@ -59,6 +61,15 @@ function createGiveawayEmbed(
     )
     .setFooter({ text: 'Clique no botão abaixo para participar!' })
     .setTimestamp();
+
+  // Adicionar campo para cargos necessários, se houver
+  if (requiredRoles.length > 0) {
+    embed.addFields({
+      name: '🔒 Requisitos',
+      value: `Este sorteio é exclusivo para membros com os seguintes cargos:\n${requiredRoles.map(role => `<@&${role}>`).join(', ')}`,
+      inline: false
+    });
+  }
 
   return embed;
 }
@@ -182,6 +193,21 @@ export default new CommandBuilder()
           .setDescription('Descrição do sorteio')
           .setRequired(false)
       )
+      .addRoleOption(option =>
+        option.setName('cargo_requerido')
+          .setDescription('Cargo necessário para participar do sorteio')
+          .setRequired(false)
+      )
+      .addRoleOption(option =>
+        option.setName('cargo_requerido2')
+          .setDescription('Cargo adicional necessário para participar')
+          .setRequired(false)
+      )
+      .addRoleOption(option =>
+        option.setName('cargo_requerido3')
+          .setDescription('Cargo adicional necessário para participar')
+          .setRequired(false)
+      )
   )
   .addSubcommand(subcommand =>
     subcommand
@@ -220,6 +246,16 @@ export default new CommandBuilder()
       const durationStr = interaction.options.getString('duracao', true);
       const winnerCount = interaction.options.getInteger('vencedores') || 1;
       const description = interaction.options.getString('descricao') || '';
+      
+      // Obter cargos requeridos
+      const requiredRole1 = interaction.options.getRole('cargo_requerido');
+      const requiredRole2 = interaction.options.getRole('cargo_requerido2');
+      const requiredRole3 = interaction.options.getRole('cargo_requerido3');
+      
+      // Filtrar apenas os cargos válidos e obter seus IDs
+      const requiredRoles: string[] = [requiredRole1, requiredRole2, requiredRole3]
+        .filter((role): role is NonNullable<typeof role> => role !== null)
+        .map(role => role.id);
 
       // Validar a duração
       const duration = parseDuration(durationStr);
@@ -244,7 +280,8 @@ export default new CommandBuilder()
           endAt,
           interaction.user.id,
           winnerCount,
-          []
+          [],
+          requiredRoles
         );
 
         // Criar o botão de participação
@@ -287,6 +324,7 @@ export default new CommandBuilder()
           winners: winnerCount,
           endAt,
           participants: [],
+          requiredRoles: requiredRoles,
         });
 
         await giveaway.save();
@@ -466,6 +504,19 @@ export default new CommandBuilder()
     
     const userId = interaction.user.id;
     const isParticipating = giveaway.participants.includes(userId);
+    
+    // Verificar se o usuário tem os cargos necessários
+    if (giveaway.requiredRoles && giveaway.requiredRoles.length > 0 && !isParticipating) {
+      const member = interaction.member as GuildMember;
+      const hasRequiredRoles = giveaway.requiredRoles.some(roleId => member.roles.cache.has(roleId));
+      
+      if (!hasRequiredRoles) {
+        return interaction.reply({
+          content: `Você não pode participar deste sorteio pois ele é restrito para membros com cargos específicos.`,
+          ephemeral: true
+        });
+      }
+    }
     
     // Atualizar participação
     if (isParticipating) {
