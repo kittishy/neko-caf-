@@ -1,5 +1,5 @@
 // Integração modular com a API da Loritta para comandos de diversão
-const axios = require('axios');
+import axios from 'axios';
 
 const LORITTA_API_KEY = process.env.LORITTA_API_KEY || 'lorixp_6y3jWw69toqTPWNvyyYYokFTJ8kwuwSnoXxx3juNLKXn';
 const LORITTA_API_BASE = 'https://api.loritta.dev/v1';
@@ -22,6 +22,6 @@ async function joke(serverId) {
   }
 }
 
-module.exports = {
+export {
   joke
 };

@@ -1,5 +1,3 @@
-import { EmbedLimit } from "@magicyan/discord";
-
 type StringRecord<K extends string = string> = Record<K, string>;
 type RecordKeys = keyof StringRecord;
 type ResolveKeys<T extends StringRecord | RecordKeys> = 
@@ -8,7 +6,7 @@ type ResolveKeys<T extends StringRecord | RecordKeys> =
 export class URLStore<S extends StringRecord | RecordKeys = StringRecord, K extends RecordKeys = ResolveKeys<S>> {
     private url = new URL("https://discord.com");
     private get lengthLimit(){
-        return EmbedLimit.URL;
+        return 1024;
     }
     constructor(url?: string | null){
         if (url && url.length <= this.lengthLimit){

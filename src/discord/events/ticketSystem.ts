@@ -14,11 +14,11 @@ export async function loadTicketSystem(client: Client) {
 
     // Inicia a verificação periódica de tickets inativos (a cada 6 horas)
     setInterval(() => {
-      ticketSystem.default.verificarTicketsInativos(client);
+      ticketSystem.verificarTicketsInativos(client);
     }, 6 * 60 * 60 * 1000);
 
     // Executa uma verificação inicial
-    ticketSystem.default.verificarTicketsInativos(client);
+    ticketSystem.verificarTicketsInativos(client);
   } catch (error) {
     console.error("[TicketSystem] Erro ao carregar o sistema de tickets:", error);
   }
@@ -28,4 +28,4 @@ declare const tickets: {
   // Adicione aqui outras funções exportadas por tickets.js, se houver
 };
 
-export default tickets;
+export default loadTicketSystem;

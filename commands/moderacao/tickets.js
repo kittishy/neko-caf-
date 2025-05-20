@@ -1,10 +1,10 @@
 // Sistema de tickets para suporte e atendimento
-const { MessageActionRow, MessageButton, MessageEmbed } = require('discord.js');
-const { db } = require('../../src/database/index.js');
-const fs = require('fs');
-const path = require('path');
-const PDFDocument = require('pdfkit');
-const axios = require('axios');
+import { MessageActionRow, MessageButton, MessageEmbed } from 'discord.js';
+import { db } from '../../src/database/index.js';
+import fs from 'fs';
+import path from 'path';
+import PDFDocument from 'pdfkit';
+import axios from 'axios';
 
 // Categorias de tickets com palavras-chave para categorização automática
 const CATEGORIAS = {
@@ -632,7 +632,7 @@ async function excluirCanalTicket(interaction, ticketId) {
   }
 }
 
-module.exports = {
+export {
   criarTicket,
   fecharTicket,
   reabrirTicket,

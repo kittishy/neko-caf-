@@ -1,3 +1,4 @@
+console.log("Loading ping command file");
 import { createCommand } from "#base";
 import { createRow } from "@magicyan/discord";
 import { ApplicationCommandType, ButtonBuilder, ButtonStyle } from "discord.js";

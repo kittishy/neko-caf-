@@ -1,7 +1,7 @@
 // Comando de interação para o sistema de tickets
-const { SlashCommandBuilder } = require('@discordjs/builders');
-const { MessageActionRow, MessageButton, MessageEmbed, Modal, TextInputComponent } = require('discord.js');
-const { 
+import { SlashCommandBuilder } from '@discordjs/builders';
+import { MessageActionRow, MessageButton, MessageEmbed, Modal, TextInputComponent } from 'discord.js';
+import { 
   criarTicket, 
   fecharTicket, 
   reabrirTicket, 
@@ -9,7 +9,7 @@ const {
   criarPainelTickets, 
   excluirCanalTicket,
   verificarTicketsInativos
-} = require('./tickets.js');
+} from './tickets.js';
 
 // Configuração do comando slash
 const ticketCommand = {
@@ -266,4 +266,4 @@ const ticketCommand = {
   }
 };
 
-module.exports = ticketCommand;
+export { ticketCommand };

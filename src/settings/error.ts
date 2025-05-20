@@ -1,7 +1,7 @@
 import { env } from "#settings";
-import { brBuilder, createEmbed, createEmbedAuthor, createWebhookClient, limitText, replaceText } from "@magicyan/discord";
+import { brBuilder, createEmbed, createEmbedAuthor, limitText, replaceText } from "@magicyan/discord";
 import ck from "chalk";
-import { type Client, codeBlock } from "discord.js";
+import { type Client, codeBlock, WebhookClient } from "discord.js";
 import settings from "../../settings.json" with { type: "json" };
 import { logger } from "./logger.js";
 
@@ -32,7 +32,7 @@ export async function baseErrorHandler(error: any, client?: Client){
         description: codeBlock("ansi", brBuilder(errorMessage)),
     });
 
-    const webhook = createWebhookClient(env.WEBHOOK_LOGS_URL);
+    const webhook = new WebhookClient({ url: env.WEBHOOK_LOGS_URL });
     if (!webhook){
         logger.log();
         logger.error(`ENV VAR → ${ck.bold.underline("WEBHOOK_LOGS_URL")} Invalid webhook url`)
