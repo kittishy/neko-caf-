@@ -121,7 +121,7 @@ export async function restoreMenu(client) {
   }
 }
 
-n// Funções de moderação
+// Funções de moderação
 const funcoesModeracao = [
   {
     id: "banir",
