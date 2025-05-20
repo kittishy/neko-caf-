@@ -1,5 +1,4 @@
-import { CommandBuilder, CommandRunOptions } from '@constatic/core';
-import { ApplicationCommandOptionType, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType, ButtonInteraction, TextChannel, GuildMember, ColorResolvable } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType, ButtonInteraction, TextChannel, GuildMember, ColorResolvable } from 'discord.js';
 import mongoose from 'mongoose';
 import { setTimeout } from 'node:timers/promises';
 
@@ -163,8 +162,8 @@ async function endGiveaway(messageId: string, channelId: string, guildId: string
   }
 }
 
-// Construção do comando
-export default new CommandBuilder()
+// Construção do comando usando o SlashCommandBuilder do Discord.js
+export const data = new SlashCommandBuilder()
   .setName('sorteio')
   .setDescription('Gerencia sorteios no servidor')
   .addSubcommand(subcommand =>
@@ -235,326 +234,308 @@ export default new CommandBuilder()
       .setDescription('Lista todos os sorteios ativos no servidor')
   )
   .setDMPermission(false)
-  .setDefaultMemberPermissions(0)
-  .run(async ({ interaction, client }: CommandRunOptions) => {
-    if (!interaction.inCachedGuild()) return;
+  .setDefaultMemberPermissions(0);
 
-    const subcommand = interaction.options.getSubcommand();
+export async function execute(interaction) {
+  if (!interaction.inCachedGuild()) return;
 
-    if (subcommand === 'criar') {
-      const prize = interaction.options.getString('premio', true);
-      const durationStr = interaction.options.getString('duracao', true);
-      const winnerCount = interaction.options.getInteger('vencedores') || 1;
-      const description = interaction.options.getString('descricao') || '';
-      
-      // Obter cargos requeridos
-      const requiredRole1 = interaction.options.getRole('cargo_requerido');
-      const requiredRole2 = interaction.options.getRole('cargo_requerido2');
-      const requiredRole3 = interaction.options.getRole('cargo_requerido3');
-      
-      // Filtrar apenas os cargos válidos e obter seus IDs
-      const requiredRoles: string[] = [requiredRole1, requiredRole2, requiredRole3]
-        .filter((role): role is NonNullable<typeof role> => role !== null)
-        .map(role => role.id);
+  const subcommand = interaction.options.getSubcommand();
 
-      // Validar a duração
-      const duration = parseDuration(durationStr);
-      if (duration <= 0) {
-        return interaction.reply({
-          content: 'Formato de duração inválido. Use, por exemplo: 1h, 6h, 1d, 3d, 1w, 1m',
-          ephemeral: true
-        });
-      }
+  if (subcommand === 'criar') {
+    const prize = interaction.options.getString('premio', true);
+    const durationStr = interaction.options.getString('duracao', true);
+    const winnerCount = interaction.options.getInteger('vencedores') || 1;
+    const description = interaction.options.getString('descricao') || '';
+    
+    // Obter cargos requeridos
+    const requiredRole1 = interaction.options.getRole('cargo_requerido');
+    const requiredRole2 = interaction.options.getRole('cargo_requerido2');
+    const requiredRole3 = interaction.options.getRole('cargo_requerido3');
+    
+    // Filtrar apenas os cargos válidos e obter seus IDs
+    const requiredRoles = [requiredRole1, requiredRole2, requiredRole3]
+      .filter(role => role !== null)
+      .map(role => role.id);
 
-      // Calcular a data de fim
-      const endAt = new Date(Date.now() + duration);
+    // Validar a duração
+    const duration = parseDuration(durationStr);
+    if (duration <= 0) {
+      return interaction.reply({
+        content: 'Formato de duração inválido. Use, por exemplo: 1h, 6h, 1d, 3d, 1w, 1m',
+        ephemeral: true
+      });
+    }
 
-      // Responder ao usuário que o sorteio está sendo criado
-      await interaction.deferReply();
+    // Calcular a data de fim
+    const endAt = new Date(Date.now() + duration);
 
-      try {
-        // Criar o embed do sorteio
-        const embed = createGiveawayEmbed(
-          prize,
-          description,
-          endAt,
-          interaction.user.id,
-          winnerCount,
-          [],
-          requiredRoles
+    // Responder ao usuário que o sorteio está sendo criado
+    await interaction.deferReply();
+
+    try {
+      // Criar o embed do sorteio
+      const embed = createGiveawayEmbed(
+        prize,
+        description,
+        endAt,
+        interaction.user.id,
+        winnerCount,
+        [],
+        requiredRoles
+      );
+
+      // Criar o botão de participação
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`giveaway-join-placeholder`)
+            .setLabel('Participar (0)')
+            .setEmoji('🎉')
+            .setStyle(ButtonStyle.Primary)
         );
 
-        // Criar o botão de participação
-        const row = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(`giveaway-join-placeholder`)
-              .setLabel('Participar (0)')
-              .setEmoji('🎉')
-              .setStyle(ButtonStyle.Primary)
-          );
-
-        // Enviar a mensagem do sorteio
-        const reply = await interaction.followUp({
-          embeds: [embed],
-          components: [row],
-          fetchReply: true
-        });
-
-        // Atualizar o ID do botão com o ID da mensagem
-        const updatedRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(`giveaway-join-${reply.id}`)
-              .setLabel('Participar (0)')
-              .setEmoji('🎉')
-              .setStyle(ButtonStyle.Primary)
-          );
-
-        await reply.edit({ components: [updatedRow] });
-
-        // Salvar o sorteio no banco de dados
-        const giveaway = new GiveawayModel({
-          messageId: reply.id,
-          channelId: interaction.channelId,
-          guildId: interaction.guildId,
-          hostId: interaction.user.id,
-          prize,
-          description,
-          winners: winnerCount,
-          endAt,
-          participants: [],
-          requiredRoles: requiredRoles,
-        });
-
-        await giveaway.save();
-
-        // Agendar o fim do sorteio
-        setTimeout(async () => {
-          await endGiveaway(reply.id, interaction.channelId, interaction.guildId);
-        }, duration);
-
-      } catch (error) {
-        console.error('Erro ao criar sorteio:', error);
-        await interaction.followUp({
-          content: 'Ocorreu um erro ao criar o sorteio.',
-          ephemeral: true
-        });
-      }
-    } else if (subcommand === 'reroll') {
-      const messageId = interaction.options.getString('mensagem_id', true);
-      
-      await interaction.deferReply();
-
-      // Buscar o sorteio no banco de dados
-      const giveaway = await GiveawayModel.findOne({
-        messageId,
-        guildId: interaction.guildId,
-        ended: true,
+      // Enviar a mensagem do sorteio
+      const reply = await interaction.followUp({
+        embeds: [embed],
+        components: [row],
+        fetchReply: true
       });
 
-      if (!giveaway) {
-        return interaction.followUp({
-          content: 'Sorteio não encontrado ou ainda não finalizado.',
-          ephemeral: true
-        });
-      }
+      // Atualizar o ID do botão com o ID da mensagem
+      const updatedRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`giveaway-join-${reply.id}`)
+            .setLabel('Participar (0)')
+            .setEmoji('🎉')
+            .setStyle(ButtonStyle.Primary)
+        );
 
-      // Verificar se há participantes
-      if (giveaway.participants.length === 0) {
-        return interaction.followUp({
-          content: 'Não é possível refazer o sorteio pois não há participantes.',
-          ephemeral: true
-        });
-      }
+      await reply.edit({ components: [updatedRow] });
 
-      try {
-        // Selecionar novos vencedores
-        const participants = giveaway.participants;
-        const winnerCount = Math.min(giveaway.winners, participants.length);
-        const winners: string[] = [];
-
-        // Algoritmo para selecionar vencedores aleatórios
-        const shuffled = [...participants].sort(() => 0.5 - Math.random());
-        winners.push(...shuffled.slice(0, winnerCount));
-
-        // Criar embed de novos vencedores
-        const winnerEmbed = createWinnerEmbed(giveaway.prize, giveaway.hostId, winners);
-        winnerEmbed.setTitle(`🎊 SORTEIO REFEITO: ${giveaway.prize}`);
-
-        await interaction.followUp({ embeds: [winnerEmbed] });
-
-        // Avisar os novos vencedores
-        const channel = interaction.channel as TextChannel;
-        if (winners.length > 0) {
-          const winnerMention = winners.map(id => `<@${id}>`).join(' ');
-          await channel.send({
-            content: `Novo sorteio realizado! Parabéns ${winnerMention}! Vocês ganharam: **${giveaway.prize}**!`,
-            allowedMentions: { users: winners }
-          });
-        }
-
-      } catch (error) {
-        console.error('Erro ao refazer sorteio:', error);
-        await interaction.followUp({
-          content: 'Ocorreu um erro ao refazer o sorteio.',
-          ephemeral: true
-        });
-      }
-    } else if (subcommand === 'finalizar') {
-      const messageId = interaction.options.getString('mensagem_id', true);
-      
-      await interaction.deferReply({ ephemeral: true });
-
-      // Verificar se o sorteio existe e ainda não terminou
-      const giveaway = await GiveawayModel.findOne({
-        messageId,
+      // Salvar o sorteio no banco de dados
+      const giveaway = new GiveawayModel({
+        messageId: reply.id,
+        channelId: interaction.channelId,
         guildId: interaction.guildId,
-        ended: false,
+        hostId: interaction.user.id,
+        prize,
+        description,
+        winners: winnerCount,
+        endAt,
+        participants: [],
+        requiredRoles,
       });
 
-      if (!giveaway) {
-        return interaction.followUp({
-          content: 'Sorteio não encontrado ou já finalizado.',
-          ephemeral: true
-        });
-      }
+      await giveaway.save();
 
-      // Verificar permissões (apenas o criador ou administradores podem finalizar)
-      if (giveaway.hostId !== interaction.user.id && !interaction.memberPermissions.has('Administrator')) {
-        return interaction.followUp({
-          content: 'Você não tem permissão para finalizar este sorteio.',
-          ephemeral: true
-        });
-      }
+      // Agendar o fim do sorteio
+      setTimeout(async () => {
+        await endGiveaway(reply.id, interaction.channelId, interaction.guildId);
+      }, duration);
 
-      try {
-        // Finalizar o sorteio
-        await endGiveaway(messageId, interaction.channelId, interaction.guildId);
-        await interaction.followUp({
-          content: 'Sorteio finalizado com sucesso!',
-          ephemeral: true
-        });
-      } catch (error) {
-        console.error('Erro ao finalizar sorteio:', error);
-        await interaction.followUp({
-          content: 'Ocorreu um erro ao finalizar o sorteio.',
-          ephemeral: true
-        });
-      }
-    } else if (subcommand === 'listar') {
-      await interaction.deferReply();
-
-      // Buscar todos os sorteios ativos do servidor
-      const giveaways = await GiveawayModel.find({
-        guildId: interaction.guildId,
-        ended: false,
-      }).sort({ endAt: 1 });
-
-      if (giveaways.length === 0) {
-        return interaction.followUp({
-          content: 'Não há sorteios ativos neste servidor.',
-          ephemeral: true
-        });
-      }
-
-      // Criar embed com a lista
-      const embed = new EmbedBuilder()
-        .setTitle('🎉 Sorteios Ativos')
-        .setColor('#FF5733' as ColorResolvable)
-        .setDescription('Lista de todos os sorteios ativos neste servidor:')
-        .setTimestamp();
-
-      giveaways.forEach((giveaway, index) => {
-        embed.addFields({
-          name: `${index + 1}. ${giveaway.prize}`,
-          value: `🏆 **Vencedores:** ${giveaway.winners}\n⏰ **Término:** <t:${Math.floor(giveaway.endAt.getTime() / 1000)}:R>\n👥 **Participantes:** ${giveaway.participants.length}\n📝 **ID:** \`${giveaway.messageId}\``,
-          inline: false
-        });
+    } catch (error) {
+      console.error('Erro ao criar sorteio:', error);
+      await interaction.followUp({
+        content: 'Ocorreu um erro ao criar o sorteio.',
+        ephemeral: true
       });
-
-      await interaction.followUp({ embeds: [embed] });
     }
-  })
-  .setExecuteButtonPress(async ({ interaction, client }) => {
-    if (!interaction.isButton() || !interaction.inCachedGuild()) return;
+  } else if (subcommand === 'reroll') {
+    const messageId = interaction.options.getString('mensagem_id', true);
     
-    const customId = interaction.customId;
-    
-    // Verificar se é um botão de participação de sorteio
-    if (!customId.startsWith('giveaway-join-')) return;
-    
-    // Extrair o ID da mensagem do sorteio
-    const messageId = customId.replace('giveaway-join-', '');
-    
+    await interaction.deferReply();
+
     // Buscar o sorteio no banco de dados
     const giveaway = await GiveawayModel.findOne({
+      messageId,
+      guildId: interaction.guildId,
+      ended: true,
+    });
+
+    if (!giveaway) {
+      return interaction.followUp({
+        content: 'Sorteio não encontrado ou ainda não finalizado.',
+        ephemeral: true
+      });
+    }
+
+    // Verificar se há participantes
+    if (giveaway.participants.length === 0) {
+      return interaction.followUp({
+        content: 'Não é possível refazer o sorteio pois não há participantes.',
+        ephemeral: true
+      });
+    }
+
+    try {
+      // Selecionar novos vencedores
+      const participants = giveaway.participants;
+      const winnerCount = Math.min(giveaway.winners, participants.length);
+      const winners: string[] = [];
+
+      // Algoritmo para selecionar vencedores aleatórios
+      const shuffled = [...participants].sort(() => 0.5 - Math.random());
+      winners.push(...shuffled.slice(0, winnerCount));
+
+      // Criar embed de novos vencedores
+      const winnerEmbed = createWinnerEmbed(giveaway.prize, giveaway.hostId, winners);
+      winnerEmbed.setTitle(`🎊 SORTEIO REFEITO: ${giveaway.prize}`);
+
+      await interaction.followUp({ embeds: [winnerEmbed] });
+
+      // Avisar os novos vencedores
+      const channel = interaction.channel as TextChannel;
+      if (winners.length > 0) {
+        const winnerMention = winners.map(id => `<@${id}>`).join(' ');
+        await channel.send({
+          content: `Novo sorteio realizado! Parabéns ${winnerMention}! Vocês ganharam: **${giveaway.prize}**!`,
+          allowedMentions: { users: winners }
+        });
+      }
+
+    } catch (error) {
+      console.error('Erro ao refazer sorteio:', error);
+      await interaction.followUp({
+        content: 'Ocorreu um erro ao refazer o sorteio.',
+        ephemeral: true
+      });
+    }
+  } else if (subcommand === 'finalizar') {
+    const messageId = interaction.options.getString('mensagem_id', true);
+    
+    await interaction.deferReply({ ephemeral: true });
+
+    // Verificar se o sorteio existe e ainda não terminou
+    const giveaway = await GiveawayModel.findOne({
+      messageId,
+      guildId: interaction.guildId,
+      ended: false,
+    });
+
+    if (!giveaway) {
+      return interaction.followUp({
+        content: 'Sorteio não encontrado ou já finalizado.',
+        ephemeral: true
+      });
+    }
+
+    // Verificar permissões (apenas o criador ou administradores podem finalizar)
+    if (giveaway.hostId !== interaction.user.id && !interaction.memberPermissions.has('Administrator')) {
+      return interaction.followUp({
+        content: 'Você não tem permissão para finalizar este sorteio.',
+        ephemeral: true
+      });
+    }
+
+    try {
+      // Finalizar o sorteio
+      await endGiveaway(messageId, interaction.channelId, interaction.guildId);
+      await interaction.followUp({
+        content: 'Sorteio finalizado com sucesso!',
+        ephemeral: true
+      });
+    } catch (error) {
+      console.error('Erro ao finalizar sorteio:', error);
+      await interaction.followUp({
+        content: 'Ocorreu um erro ao finalizar o sorteio.',
+        ephemeral: true
+      });
+    }
+  } else if (subcommand === 'listar') {
+    await interaction.deferReply();
+
+    // Buscar todos os sorteios ativos do servidor
+    const giveaways = await GiveawayModel.find({
+      guildId: interaction.guildId,
+      ended: false,
+    }).sort({ endAt: 1 });
+
+    if (giveaways.length === 0) {
+      return interaction.followUp({
+        content: 'Não há sorteios ativos neste servidor.',
+        ephemeral: true
+      });
+    }
+
+    // Criar embed com a lista
+    const embed = new EmbedBuilder()
+      .setTitle('🎉 Sorteios Ativos')
+      .setColor('#FF5733' as ColorResolvable)
+      .setDescription('Lista de todos os sorteios ativos neste servidor:')
+      .setTimestamp();
+
+    giveaways.forEach((giveaway, index) => {
+      embed.addFields({
+        name: `${index + 1}. ${giveaway.prize}`,
+        value: `🏆 **Vencedores:** ${giveaway.winners}\n⏰ **Término:** <t:${Math.floor(giveaway.endAt.getTime() / 1000)}:R>\n👥 **Participantes:** ${giveaway.participants.length}\n📝 **ID:** \`${giveaway.messageId}\``,
+        inline: false
+      });
+    });
+
+    await interaction.followUp({ embeds: [embed] });
+  }
+}
+
+// Função para lidar com interações de botão
+export async function handleButtonInteraction(interaction) {
+  if (!interaction.isButton() || !interaction.inCachedGuild()) return;
+  
+  const customId = interaction.customId;
+  
+  // Verificar se é um botão de participação de sorteio
+  if (!customId.startsWith('giveaway-join-')) return;
+  
+  // Extrair o ID da mensagem do sorteio
+  const messageId = customId.replace('giveaway-join-', '');
+  
+  // Buscar o sorteio no banco de dados
+  const giveaway = await GiveawayModel.findOne({
+    messageId,
+    channelId: interaction.channelId,
+    guildId: interaction.guildId,
+    ended: false,
+  });
+  
+  if (!giveaway) {
+    return interaction.reply({
+      content: 'Este sorteio não existe ou já foi finalizado.',
+      ephemeral: true
+    });
+  }
+  
+  const userId = interaction.user.id;
+  const isParticipating = giveaway.participants.includes(userId);
+  
+  // Verificar se o usuário tem os cargos necessários
+  if (giveaway.requiredRoles && giveaway.requiredRoles.length > 0 && !isParticipating) {
+    const member = interaction.member as GuildMember;
+    const hasRequiredRoles = giveaway.requiredRoles.some(roleId => member.roles.cache.has(roleId));
+    
+    if (!hasRequiredRoles) {
+      return interaction.reply({
+        content: ' Vocês precisa ter os cargos necessários para participar deste sorteio.',
+        ephemeral: true
+      });
+    }
+  }
+  
+  // Adicionar o usuário ao sorteio no banco de dados
+  if (!isParticipating) {
+    await GiveawayModel.findOneAndUpdate({
       messageId,
       channelId: interaction.channelId,
       guildId: interaction.guildId,
       ended: false,
+    }, {
+      $push: { participants: userId },
     });
-    
-    if (!giveaway) {
-      return interaction.reply({
-        content: 'Este sorteio não existe ou já foi finalizado.',
-        ephemeral: true
-      });
-    }
-    
-    const userId = interaction.user.id;
-    const isParticipating = giveaway.participants.includes(userId);
-    
-    // Verificar se o usuário tem os cargos necessários
-    if (giveaway.requiredRoles && giveaway.requiredRoles.length > 0 && !isParticipating) {
-      const member = interaction.member as GuildMember;
-      const hasRequiredRoles = giveaway.requiredRoles.some(roleId => member.roles.cache.has(roleId));
-      
-      if (!hasRequiredRoles) {
-        return interaction.reply({
-          content: `Você não pode participar deste sorteio pois ele é restrito para membros com cargos específicos.`,
-          ephemeral: true
-        });
-      }
-    }
-    
-    // Atualizar participação
-    if (isParticipating) {
-      // Remover participação
-      giveaway.participants = giveaway.participants.filter(id => id !== userId);
-      await interaction.reply({
-        content: `Você desistiu de participar do sorteio **${giveaway.prize}**.`,
-        ephemeral: true
-      });
-    } else {
-      // Adicionar participação
-      giveaway.participants.push(userId);
-      await interaction.reply({
-        content: `Você está participando do sorteio **${giveaway.prize}**. Boa sorte!`,
-        ephemeral: true
-      });
-    }
-    
-    // Salvar alterações
-    await giveaway.save();
-    
-    // Atualizar o botão com o novo contador
-    const row = new ActionRowBuilder<ButtonBuilder>()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`giveaway-join-${messageId}`)
-          .setLabel(`Participar (${giveaway.participants.length})`)
-          .setEmoji('🎉')
-          .setStyle(ButtonStyle.Primary)
-      );
-    
-    // Atualizar o embed
-    const message = await interaction.message.fetch();
-    const updatedEmbed = EmbedBuilder.from(message.embeds[0])
-      .spliceFields(3, 1, { name: '👥 Participantes', value: giveaway.participants.length.toString(), inline: true });
-    
-    await message.edit({
-      embeds: [updatedEmbed],
-      components: [row]
-    });
+  }
+  
+  // Atualizar o botão de participação
+  await interaction.update({
+    customId: `giveaway-join-${messageId}`,
+    label: isParticipating ? 'Participando' : 'Participar',
+    style: isParticipating ? ButtonStyle.Secondary : ButtonStyle.Success,
   });
+}
