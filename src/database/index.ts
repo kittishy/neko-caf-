@@ -1,6 +1,7 @@
 import mongoose, { InferSchemaType, model } from "mongoose";
 import { guildSchema } from "./schemas/guild.js";
 import { memberSchema } from "./schemas/member.js";
+import { ticketSchema } from "./schemas/ticket.js";
 import { env, logger } from "#settings";
 import chalk from "chalk";
 
@@ -15,8 +16,10 @@ try {
 
 export const db = {
    guilds: model("guild", guildSchema, "guilds"),
-   members: model("member", memberSchema, "members")
+   members: model("member", memberSchema, "members"),
+   tickets: model("ticket", ticketSchema, "tickets")
 };
 
 export type GuildSchema = InferSchemaType<typeof guildSchema>;
 export type MemberSchema = InferSchemaType<typeof memberSchema>;
+export type TicketSchema = InferSchemaType<typeof ticketSchema>;
