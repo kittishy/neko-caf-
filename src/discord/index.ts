@@ -5,7 +5,8 @@ import {
   Message, 
   ApplicationCommandData 
 } from 'discord.js';
-import { env } from 'node:process';
+import * as fs from 'fs';
+import * as dotenv from 'dotenv';
 
 // Tipos para os criadores
 type EventCallback<K extends keyof ClientEvents> = (
@@ -49,6 +50,6 @@ export function createCommand(
 
 let config = {};
 
-if (fs.existsSync("./config.json") && typeof env.parse === "function") {
-  config = env.parse(fs.readFileSync("./.env", "utf8"));
+if (fs.existsSync("./config.json")) {
+  config = dotenv.parse(fs.readFileSync("./.env", "utf8"));
 }

@@ -1,6 +1,6 @@
-import { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ComponentType, ButtonInteraction, TextChannel, GuildMember, ColorResolvable } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ButtonInteraction, TextChannel, GuildMember, ColorResolvable, CommandInteraction } from 'discord.js';
 import mongoose from 'mongoose';
-import { setTimeout } from 'node:timers/promises';
+// import { setTimeout } from 'node:timers/promises';
 
 // Schema do MongoDB para os sorteios
 const GiveawaySchema = new mongoose.Schema({
@@ -23,7 +23,7 @@ const GiveawayModel = mongoose.model('Giveaway', GiveawaySchema);
 // Função para formatar a duração
 function parseDuration(duration: string): number {
   const match = duration.match(/^(\d+)([hdwm])$/);
-  if (!match) return 0;
+  if (!match) { return 0; }
 
   const value = parseInt(match[1]);
   const unit = match[2];
@@ -75,7 +75,7 @@ function createGiveawayEmbed(
 
 // Função para criar o embed de vitória
 function createWinnerEmbed(prize: string, hostId: string, winners: string[]) {
-  const embed = new EmbedBuilder()
+  return new EmbedBuilder()
     .setTitle(`🎊 SORTEIO FINALIZADO: ${prize}`)
     .setDescription(`Parabéns aos vencedores!`)
     .setColor('#33FF57' as ColorResolvable)
@@ -85,8 +85,6 @@ function createWinnerEmbed(prize: string, hostId: string, winners: string[]) {
     )
     .setFooter({ text: 'Obrigado a todos que participaram!' })
     .setTimestamp();
-
-  return embed;
 }
 
 // Função para finalizar o sorteio
@@ -98,20 +96,26 @@ async function endGiveaway(messageId: string, channelId: string, guildId: string
     ended: false,
   });
 
-  if (!giveaway) return;
+  if (!giveaway) {
+    return;
+  }
 
-  const channel = global.client.channels.cache.get(channelId) as TextChannel;
-  if (!channel) return;
+  const channel = (global as any).client.channels.cache.get(channelId) as TextChannel;
+  if (!channel) {
+    return;
+  }
 
   try {
     const message = await channel.messages.fetch(messageId);
-    if (!message) return;
+    if (!message) {
+      return;
+    }
 
     // Atualizar o status do sorteio
     giveaway.ended = true;
 
     // Selecionar os vencedores
-    const participants = giveaway.participants;
+    const { participants } = giveaway;
     const winnerCount = Math.min(giveaway.winners, participants.length);
     const winners: string[] = [];
 
@@ -161,7 +165,6 @@ async function endGiveaway(messageId: string, channelId: string, guildId: string
     console.error('Erro ao finalizar sorteio:', error);
   }
 }
-
 // Construção do comando usando o SlashCommandBuilder do Discord.js
 export const data = new SlashCommandBuilder()
   .setName('sorteio')
@@ -236,21 +239,24 @@ export const data = new SlashCommandBuilder()
   .setDMPermission(false)
   .setDefaultMemberPermissions(0);
 
-export async function execute(interaction) {
-  if (!interaction.inCachedGuild()) return;
+export async function execute(interaction: CommandInteraction) {
+  if (!interaction.inCachedGuild()) {
+    return;
+  }
 
-  const subcommand = interaction.options.getSubcommand();
+  const subcommand = (interaction as import('discord.js').ChatInputCommandInteraction).options.getSubcommand();
 
   if (subcommand === 'criar') {
-    const prize = interaction.options.getString('premio', true);
-    const durationStr = interaction.options.getString('duracao', true);
-    const winnerCount = interaction.options.getInteger('vencedores') || 1;
-    const description = interaction.options.getString('descricao') || '';
+    const options = interaction.options as import('discord.js').CommandInteractionOptionResolver;
+    const prize = options.getString('premio', true);
+    const durationStr = options.getString('duracao', true);
+    const winnerCount = options.getInteger('vencedores') || 1;
+    const description = options.getString('descricao') || '';
     
     // Obter cargos requeridos
-    const requiredRole1 = interaction.options.getRole('cargo_requerido');
-    const requiredRole2 = interaction.options.getRole('cargo_requerido2');
-    const requiredRole3 = interaction.options.getRole('cargo_requerido3');
+    const requiredRole1 = options.getRole('cargo_requerido');
+    const requiredRole2 = options.getRole('cargo_requerido2');
+    const requiredRole3 = options.getRole('cargo_requerido3');
     
     // Filtrar apenas os cargos válidos e obter seus IDs
     const requiredRoles = [requiredRole1, requiredRole2, requiredRole3]
@@ -330,19 +336,22 @@ export async function execute(interaction) {
       await giveaway.save();
 
       // Agendar o fim do sorteio
-      setTimeout(async () => {
-        await endGiveaway(reply.id, interaction.channelId, interaction.guildId);
+      setTimeout(() => {
+        endGiveaway(reply.id, interaction.channelId, interaction.guildId);
       }, duration);
 
+      return;
     } catch (error) {
       console.error('Erro ao criar sorteio:', error);
       await interaction.followUp({
         content: 'Ocorreu um erro ao criar o sorteio.',
         ephemeral: true
       });
+      return;
     }
   } else if (subcommand === 'reroll') {
-    const messageId = interaction.options.getString('mensagem_id', true);
+    const options = interaction.options as import('discord.js').CommandInteractionOptionResolver;
+    const messageId = options.getString('mensagem_id', true);
     
     await interaction.deferReply();
 
@@ -354,23 +363,25 @@ export async function execute(interaction) {
     });
 
     if (!giveaway) {
-      return interaction.followUp({
+      await interaction.followUp({
         content: 'Sorteio não encontrado ou ainda não finalizado.',
         ephemeral: true
       });
+      return;
     }
 
     // Verificar se há participantes
     if (giveaway.participants.length === 0) {
-      return interaction.followUp({
+      await interaction.followUp({
         content: 'Não é possível refazer o sorteio pois não há participantes.',
         ephemeral: true
       });
+      return;
     }
 
     try {
       // Selecionar novos vencedores
-      const participants = giveaway.participants;
+      const { participants } = giveaway;
       const winnerCount = Math.min(giveaway.winners, participants.length);
       const winners: string[] = [];
 
@@ -394,15 +405,18 @@ export async function execute(interaction) {
         });
       }
 
+      return;
     } catch (error) {
       console.error('Erro ao refazer sorteio:', error);
       await interaction.followUp({
         content: 'Ocorreu um erro ao refazer o sorteio.',
         ephemeral: true
       });
+      return;
     }
   } else if (subcommand === 'finalizar') {
-    const messageId = interaction.options.getString('mensagem_id', true);
+    const options = interaction.options as import('discord.js').CommandInteractionOptionResolver;
+    const messageId = options.getString('mensagem_id', true);
     
     await interaction.deferReply({ ephemeral: true });
 
@@ -414,18 +428,20 @@ export async function execute(interaction) {
     });
 
     if (!giveaway) {
-      return interaction.followUp({
+      await interaction.followUp({
         content: 'Sorteio não encontrado ou já finalizado.',
         ephemeral: true
       });
+      return;
     }
 
     // Verificar permissões (apenas o criador ou administradores podem finalizar)
     if (giveaway.hostId !== interaction.user.id && !interaction.memberPermissions.has('Administrator')) {
-      return interaction.followUp({
+      await interaction.followUp({
         content: 'Você não tem permissão para finalizar este sorteio.',
         ephemeral: true
       });
+      return;
     }
 
     try {
@@ -435,12 +451,14 @@ export async function execute(interaction) {
         content: 'Sorteio finalizado com sucesso!',
         ephemeral: true
       });
+      return;
     } catch (error) {
       console.error('Erro ao finalizar sorteio:', error);
       await interaction.followUp({
         content: 'Ocorreu um erro ao finalizar o sorteio.',
         ephemeral: true
       });
+      return;
     }
   } else if (subcommand === 'listar') {
     await interaction.deferReply();
@@ -452,10 +470,11 @@ export async function execute(interaction) {
     }).sort({ endAt: 1 });
 
     if (giveaways.length === 0) {
-      return interaction.followUp({
+      await interaction.followUp({
         content: 'Não há sorteios ativos neste servidor.',
         ephemeral: true
       });
+      return;
     }
 
     // Criar embed com a lista
@@ -474,17 +493,24 @@ export async function execute(interaction) {
     });
 
     await interaction.followUp({ embeds: [embed] });
+    return;
   }
-}
 
+  // Fallback return to satisfy all code paths
+  return;
+}
 // Função para lidar com interações de botão
-export async function handleButtonInteraction(interaction) {
-  if (!interaction.isButton() || !interaction.inCachedGuild()) return;
+export async function handleButtonInteraction(interaction: ButtonInteraction): Promise<void> {
+  if (!interaction.isButton() || !interaction.inCachedGuild()) {
+    return;
+  }
   
-  const customId = interaction.customId;
+  const { customId } = interaction;
   
   // Verificar se é um botão de participação de sorteio
-  if (!customId.startsWith('giveaway-join-')) return;
+  if (!customId.startsWith('giveaway-join-')) {
+    return;
+  }
   
   // Extrair o ID da mensagem do sorteio
   const messageId = customId.replace('giveaway-join-', '');
@@ -498,10 +524,11 @@ export async function handleButtonInteraction(interaction) {
   });
   
   if (!giveaway) {
-    return interaction.reply({
+    await interaction.reply({
       content: 'Este sorteio não existe ou já foi finalizado.',
       ephemeral: true
     });
+    return;
   }
   
   const userId = interaction.user.id;
@@ -513,10 +540,11 @@ export async function handleButtonInteraction(interaction) {
     const hasRequiredRoles = giveaway.requiredRoles.some(roleId => member.roles.cache.has(roleId));
     
     if (!hasRequiredRoles) {
-      return interaction.reply({
+      await interaction.reply({
         content: ' Vocês precisa ter os cargos necessários para participar deste sorteio.',
         ephemeral: true
       });
+      return;
     }
   }
   
@@ -533,9 +561,15 @@ export async function handleButtonInteraction(interaction) {
   }
   
   // Atualizar o botão de participação
+  const updatedRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`giveaway-join-${messageId}`)
+      .setLabel(isParticipating ? 'Participando' : 'Participar')
+      .setEmoji('🎉')
+      .setStyle(isParticipating ? ButtonStyle.Secondary : ButtonStyle.Success)
+  );
   await interaction.update({
-    customId: `giveaway-join-${messageId}`,
-    label: isParticipating ? 'Participando' : 'Participar',
-    style: isParticipating ? ButtonStyle.Secondary : ButtonStyle.Success,
+    components: [updatedRow]
   });
+  return;
 }
